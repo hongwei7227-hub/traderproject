@@ -179,3 +179,38 @@ class TestScopedTablesAreEnforced:
                 if len(columns) > 1 and columns[0] != "tenant_id":
                     wrong.append(f"{entity.__tablename__}.{index.name}")
         assert not wrong, f"composite indexes not leading with tenant_id: {wrong}"
+
+    def test_every_scoped_table_has_a_usable_tenant_index(self) -> None:
+        """Something must lead with `tenant_id` — index or unique constraint.
+
+        Stated as a requirement rather than as a standalone index on the
+        mixin, because every one of these tables already has a composite that
+        starts there. Adding a single-column index on top would be redundant,
+        and redundant indexes are paid for on every insert and update.
+        """
+        from sqlalchemy import UniqueConstraint
+
+        from kairos.adapters.persistence.entities import Base, ScopedEntity
+
+        unserved: list[str] = []
+        for mapper in Base.registry.mappers:
+            entity = mapper.class_
+            if not issubclass(entity, ScopedEntity):
+                continue
+            table = entity.__table__
+
+            leads = [
+                [c.name for c in index.columns][:1] == ["tenant_id"]
+                for index in table.indexes
+            ] + [
+                [c.name for c in constraint.columns][:1] == ["tenant_id"]
+                for constraint in table.constraints
+                if isinstance(constraint, UniqueConstraint)
+            ]
+            if not any(leads):
+                unserved.append(table.name)
+
+        assert not unserved, (
+            f"{', '.join(unserved)} have no index leading with tenant_id, so "
+            "the predicate every read applies would fall back to a scan"
+        )

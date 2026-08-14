@@ -60,9 +60,16 @@ class ScopedEntity:
     The repository layer refuses to build a query for one of these without a
     tenant predicate. Inheriting from this is therefore a statement that the
     table must never be read across tenants.
+
+    No index is declared here. Every scoped table needs one leading with
+    `tenant_id`, but each already has a composite index or unique constraint
+    that starts there and serves the same lookups — a standalone index on top
+    would be redundant, and redundant indexes are paid for on every write. The
+    requirement is asserted in the architecture suite instead, so a new table
+    that satisfies it differently still satisfies it.
     """
 
-    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 # ---------------------------------------------------------------------------
