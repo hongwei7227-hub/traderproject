@@ -11,6 +11,12 @@ from kairos.core.catalog.descriptors import (
     TokenBudget,
     Wire,
 )
+from kairos.core.catalog.registry import (
+    Catalog,
+    CatalogError,
+    UnknownModel,
+    UnknownProvider,
+)
 from kairos.core.catalog.resolution import (
     DEFAULT_CHAIN,
     ExplicitRequestResolver,
@@ -29,6 +35,8 @@ __all__ = [
     "DEFAULT_CHAIN",
     "Access",
     "Capability",
+    "Catalog",
+    "CatalogError",
     "Endpoint",
     "ExplicitRequestResolver",
     "ModelChoice",
@@ -44,6 +52,8 @@ __all__ = [
     "SystemBaselineResolver",
     "TenantPreferenceResolver",
     "TokenBudget",
+    "UnknownModel",
+    "UnknownProvider",
     "Wire",
     "WorkspaceDefaultResolver",
 ]
