@@ -77,7 +77,10 @@ export function useDeleteThread(): UseMutationResult<void, unknown, string> {
     },
 
     onSettled: (_data, _error, threadId) => {
-      client.invalidateQueries({ queryKey: keys.threads.lists() })
+      // Fire and forget. The list re-renders when the refetch lands; making
+      // the callback wait for it would hold the mutation open for a round trip
+      // after the row has already gone.
+      void client.invalidateQueries({ queryKey: keys.threads.lists() })
       client.removeQueries({ queryKey: keys.threads.detail(threadId) })
     },
   })
@@ -94,7 +97,7 @@ export function useRefreshAfterTurn(): (threadId: string) => void {
   const client = useQueryClient()
 
   return (threadId: string) => {
-    client.invalidateQueries({ queryKey: keys.threads.detail(threadId) })
-    client.invalidateQueries({ queryKey: keys.threads.lists() })
+    void client.invalidateQueries({ queryKey: keys.threads.detail(threadId) })
+    void client.invalidateQueries({ queryKey: keys.threads.lists() })
   }
 }

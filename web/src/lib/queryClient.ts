@@ -48,6 +48,9 @@ export function createQueryClient(): QueryClient {
  * identical between accounts, nothing about the stale entry looks wrong.
  */
 export function resetForSignOut(client: QueryClient): void {
-  client.cancelQueries()
+  // Not awaited, and deliberately so: the cache must be gone before the next
+  // render regardless of whether in-flight requests have finished unwinding.
+  // `void` marks the omission as a decision rather than a missing `await`.
+  void client.cancelQueries()
   client.clear()
 }

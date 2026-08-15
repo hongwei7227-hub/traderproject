@@ -107,11 +107,39 @@ class Transcripts:
         return None
 
 
+class Preferences:
+    """Model choices, held in memory for the life of the process.
+
+    Persisted only this far, but persisted honestly: a change made through the
+    settings page is visible on the next read, which is the behaviour the
+    resolution chain is supposed to have.
+    """
+
+    def __init__(self) -> None:
+        self._by_role: dict[str, str] = {}
+
+    async def as_mapping(self) -> dict[str, str]:
+        return dict(self._by_role)
+
+    async def set_role(self, role: str, model_id: str) -> None:
+        self._by_role[role] = model_id
+
+    async def clear_role(self, role: str) -> None:
+        self._by_role.pop(role, None)
+
+
+class Turns:
+    async def token_usage(self) -> tuple[int, int]:
+        return 930, 123  # what the scripted conversation below actually spends
+
+
 class Repositories:
     def __init__(self) -> None:
         self.threads = Threads()
         self.tools = Tools()
         self.transcripts = Transcripts()
+        self.preferences = Preferences()
+        self.turns = Turns()
 
 
 class ScriptedModel:

@@ -97,7 +97,7 @@ class TestAssembly:
         Deriving instead of configuring turns a possible runtime error into an
         impossible one.
         """
-        baseline = container._baseline()
+        baseline = container.baseline()
         assert baseline[Role.PRIMARY] in CATALOG
         assert baseline[Role.CONDENSE] == "compact"
 
@@ -106,7 +106,7 @@ class TestAssembly:
     ) -> None:
         # Condensing and extraction are high-volume and low-judgment; paying
         # flagship rates for them is the easiest way to waste money here.
-        baseline = container._baseline()
+        baseline = container.baseline()
         assert baseline[Role.CONDENSE] != baseline[Role.PRIMARY]
 
 

@@ -3,7 +3,7 @@
  */
 
 import MockAdapter from 'axios-mock-adapter'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ApiError, configureAuth, createClient } from '../client'
 

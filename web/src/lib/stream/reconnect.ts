@@ -181,7 +181,16 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
       'abort',
       () => {
         clearTimeout(timer)
-        reject(signal.reason ?? new DOMException('aborted', 'AbortError'))
+        // The caller's reason is passed through when it is an Error, so that a
+        // stack survives. Anything else is replaced rather than thrown as-is:
+        // rejecting with a bare string loses the stack and reads as a crash
+        // with no origin wherever it is finally caught.
+        const reason: unknown = signal.reason
+        reject(
+          reason instanceof Error
+            ? reason
+            : new DOMException('aborted', 'AbortError'),
+        )
       },
       { once: true },
     )

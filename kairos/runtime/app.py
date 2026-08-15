@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from kairos.api.http import configuration as configuration_routes
 from kairos.api.http import threads as thread_routes
 from kairos.api.http.identity import IdentityResolver, TokenVerifier
 from kairos.api.http.middleware import DEFAULT_PUBLIC_PATHS, TenantScopeMiddleware
@@ -86,7 +87,7 @@ def _install_middleware(
         allow_credentials=True,
         # An explicit list rather than a wildcard: a wildcard here would also
         # admit methods added to the framework later without review.
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
     )
 
@@ -104,6 +105,12 @@ def _install_routes(app: FastAPI, container: Container) -> None:
     need, and this decides what satisfies it.
     """
     app.include_router(thread_routes.router, prefix="/api/v1")
+    app.include_router(configuration_routes.router, prefix="/api/v1")
+
+    # Satisfied here rather than left to the caller: the catalogue and the
+    # resolution chain are the container's, and no deployment substitutes them
+    # independently of it.
+    app.dependency_overrides[configuration_routes.get_selection] = lambda: container
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, Any]:
@@ -135,3 +142,6 @@ def dependency_overrides_for(
         app.dependency_overrides[thread_routes.get_engine] = lambda: engine
     if repositories is not None:
         app.dependency_overrides[thread_routes.get_repositories] = lambda: repositories
+        app.dependency_overrides[configuration_routes.get_repositories] = (
+            lambda: repositories
+        )

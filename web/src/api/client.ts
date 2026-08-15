@@ -96,8 +96,12 @@ function describe(error: AxiosError): ApiError {
     )
   }
 
-  const retryAfterHeader = error.response?.headers?.['retry-after']
-  const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined
+  // Headers are typed loosely by the library. Narrowed to a string before it
+  // is parsed, so that an array-valued header becomes "no value" rather than
+  // `NaN` presented to a caller as a wait time.
+  const retryAfterHeader: unknown = error.response?.headers?.['retry-after']
+  const retryAfter =
+    typeof retryAfterHeader === 'string' ? Number(retryAfterHeader) : undefined
 
   return new ApiError(
     status,
@@ -164,6 +168,10 @@ export async function post<T>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   return (await api.post<T>(url, body, config)).data
+}
+
+export async function put<T>(url: string, body?: unknown): Promise<T> {
+  return (await api.put<T>(url, body)).data
 }
 
 export async function patch<T>(url: string, body?: unknown): Promise<T> {

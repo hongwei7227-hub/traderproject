@@ -230,16 +230,20 @@ class Container:
                 user_id=scope.user_id,
                 explicit=explicit,  # type: ignore[arg-type]
                 tenant_preferences=preferences,  # type: ignore[arg-type]
-                baseline=self._baseline(),
+                baseline=self.baseline(),
             )
         )
 
-    def _baseline(self) -> dict[str, str]:
+    def baseline(self) -> dict[str, str]:
         """The platform's own defaults, derived from what the catalogue offers.
 
         Derived rather than configured so that a deployment cannot name a
         default it does not actually have — the mistake that turns a startup
         error into a runtime one.
+
+        Public because the configuration endpoints resolve roles the same way
+        the engine does, and a tenant reading which model serves a role should
+        get the answer from the same source that decides it.
         """
         selectable = self.catalog.selectable()
         if not selectable:

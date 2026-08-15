@@ -24,6 +24,47 @@ export interface ThreadPage {
   offset: number
 }
 
+/** A model as the account settings offer it. */
+export interface ModelView {
+  id: string
+  provider: string
+  provider_name: string
+  wire: string
+  context: number
+  max_output: number
+  capabilities: string[]
+  /** Roles this model has the capabilities to fill. */
+  eligible_roles: string[]
+}
+
+export interface ModelList {
+  models: ModelView[]
+}
+
+/**
+ * Which model serves a role, and what decided that.
+ *
+ * `decided_by` is the reason the interface can answer "why is my request going
+ * there?" without anyone reading a log.
+ */
+export interface RoleAssignment {
+  role: string
+  model_id: string
+  decided_by: string
+  overridden: boolean
+  requires: string[]
+}
+
+export interface PreferenceList {
+  roles: RoleAssignment[]
+}
+
+export interface UsageView {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
+
 export interface SendMessageBody {
   prompt: string
   model?: string

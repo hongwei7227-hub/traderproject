@@ -5,7 +5,6 @@ import { Composer } from '@/components/chat/Composer'
 import { TurnView } from '@/components/chat/TurnView'
 import { useThread, useRefreshAfterTurn } from '@/hooks/useThreads'
 import { useTurnStream } from '@/hooks/useTurnStream'
-import { isSettled } from '@/lib/turn/state'
 
 /**
  * One conversation.

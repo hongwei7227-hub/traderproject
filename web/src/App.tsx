@@ -1,10 +1,11 @@
-import { MessageSquare, Moon, Sun, Monitor } from 'lucide-react'
+import { MessageSquare, Moon, Sun, Monitor, SlidersHorizontal } from 'lucide-react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { useTheme, type ThemeChoice } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/cn'
 import { ChatPage } from '@/pages/Chat/ChatPage'
+import { SettingsPage } from '@/pages/Settings/SettingsPage'
 import { ThreadListPage } from '@/pages/Threads/ThreadListPage'
 
 export function App() {
@@ -16,12 +17,25 @@ export function App() {
           <Route path="/" element={<Navigate to="/threads" replace />} />
           <Route path="/threads" element={<ThreadListPage />} />
           <Route path="/threads/:threadId" element={<ChatPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </div>
   )
 }
+
+/**
+ * The navigation, as data.
+ *
+ * One source for the sidebar so that adding a destination is adding an entry
+ * rather than editing markup in more than one place — which is how a route
+ * comes to exist with no way to reach it.
+ */
+const DESTINATIONS = [
+  { to: '/threads', label: 'Conversations', Icon: MessageSquare },
+  { to: '/settings', label: 'Settings', Icon: SlidersHorizontal },
+] as const
 
 function Sidebar() {
   return (
@@ -30,27 +44,31 @@ function Sidebar() {
       aria-label="Main"
     >
       <div className="px-4 py-4">
-        <span className="text-sm font-semibold tracking-tight text-ink">Kairos</span>
+        <span className="text-sm font-semibold tracking-tight text-ink">
+          Kairos Trader
+        </span>
       </div>
 
-      <ul className="flex-1 px-2">
-        <li>
-          <NavLink
-            to="/threads"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                isActive
-                  ? 'bg-accent-soft text-ink'
-                  : 'text-ink-muted hover:bg-raised hover:text-ink',
-              )
-            }
-          >
-            <MessageSquare className="h-4 w-4" aria-hidden="true" />
-            Conversations
-          </NavLink>
-        </li>
+      <ul className="flex-1 space-y-0.5 px-2">
+        {DESTINATIONS.map(({ to, label, Icon }) => (
+          <li key={to}>
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2 rounded px-3 py-2 text-sm transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  isActive
+                    ? 'bg-accent-soft text-ink'
+                    : 'text-ink-muted hover:bg-raised hover:text-ink',
+                )
+              }
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              {label}
+            </NavLink>
+          </li>
+        ))}
       </ul>
 
       <div className="border-t border-border p-2">
