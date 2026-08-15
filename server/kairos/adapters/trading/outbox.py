@@ -31,6 +31,10 @@ from kairos.core.trading.orders import TradeProposal
 SUBMIT_DESTINATION = "kairos-order-submit:create"
 CANCEL_DESTINATION = "kairos-order-cancel:cancel"
 
+# Databases whose `SELECT … FOR UPDATE SKIP LOCKED` lets one relay claim rows
+# while another moves past them rather than waiting.
+_ROW_LOCKING_DIALECTS = frozenset({"postgresql", "mysql", "mariadb", "oracle"})
+
 
 class MessagePublisher(Protocol):
     """Whatever actually reaches the broker.
@@ -194,13 +198,40 @@ class OutboxRelay:
         # draining a queue across all of them. Written as an explicit query
         # rather than through the scoped repository so that the absence of a
         # tenant predicate is visible here instead of looking like an omission.
-        result = await self._session.execute(
+        query = (
             select(OrderOutbox)
             .where(OrderOutbox.status == OutboxStatus.PENDING)
             .order_by(OrderOutbox.created_at)
             .limit(self._batch)
         )
+
+        # Claimed, not merely read. Two relay instances — one deployed while
+        # the other is still draining — would otherwise both pick up the same
+        # rows and publish each order twice. The worker's idempotency key makes
+        # that survivable rather than harmless, and surviving a race is a worse
+        # position than not having one.
+        #
+        # `skip_locked` rather than plain locking, so the second relay moves on
+        # to rows the first has not claimed instead of blocking behind it.
+        if self._locks_rows():
+            query = query.with_for_update(skip_locked=True)
+
+        result = await self._session.execute(query)
         return result.scalars().all()
+
+    def _locks_rows(self) -> bool:
+        """Whether this database can claim rows without blocking.
+
+        Named dialects rather than a capability flag: SQLAlchemy's
+        `supports_for_update_of` describes the `FOR UPDATE OF <table>` clause,
+        which is a different feature, and reading it as "supports SKIP LOCKED"
+        silently disables locking on Postgres — where it matters most.
+
+        SQLite has neither, and does not need it: a deployment running two
+        relays against SQLite has a larger problem than this one.
+        """
+        bind = self._session.bind
+        return bind is not None and bind.dialect.name in _ROW_LOCKING_DIALECTS
 
     async def _record_failure(self, row: OrderOutbox, error: Exception) -> None:
         row.attempts += 1

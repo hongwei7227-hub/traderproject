@@ -6,6 +6,26 @@ lets an order survive the worker being restarted mid-flight.
 """
 
 from kairos.adapters.trading.orders import ExecutionOrders, order_table
-from kairos.adapters.trading.outbox import OutboxGateway, OutboxRelay
+from kairos.adapters.trading.outbox import (
+    MessagePublisher,
+    OutboxGateway,
+    OutboxRelay,
+)
+from kairos.adapters.trading.publishers import (
+    PublishFailed,
+    RecordingPublisher,
+    RefusingPublisher,
+    RocketMQPublisher,
+)
 
-__all__ = ["ExecutionOrders", "OutboxGateway", "OutboxRelay", "order_table"]
+__all__ = [
+    "ExecutionOrders",
+    "MessagePublisher",
+    "OutboxGateway",
+    "OutboxRelay",
+    "PublishFailed",
+    "RecordingPublisher",
+    "RefusingPublisher",
+    "RocketMQPublisher",
+    "order_table",
+]

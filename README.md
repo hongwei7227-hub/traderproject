@@ -169,6 +169,18 @@ happened to be down — and, worse, could publish an instruction whose
 surrounding transaction then rolled back, leaving the worker holding an order
 the platform has no record of.
 
+The relay runs outside any request, so an order survives the broker being down,
+the relay restarting, and the web process being replaced under it. A row is
+marked sent only after the publish returns — a crash mid-sweep re-delivers
+rather than drops, which is safe precisely because the worker's idempotency key
+was generated before the proposal was queued.
+
+```bash
+python scripts/relay.py             # drain to RocketMQ, until stopped
+python scripts/relay.py --dry-run   # log what would be sent, send nothing
+python scripts/relay.py --once      # one sweep, for a scheduler rather than a daemon
+```
+
 Coming back, the worker's `orders` table is read and never written. One writer,
 because two is how a fill gets overwritten by a status that was already stale
 when it was read. Positions are derived from those orders rather than stored,
@@ -222,7 +234,7 @@ pnpm dev          # proxies /api/v1 to 127.0.0.1:8000
 
 ## Status
 
-729 backend tests and 140 frontend tests, no external services required.
+745 backend tests and 140 frontend tests, no external services required.
 
 | Area | State |
 |---|---|
@@ -237,10 +249,10 @@ pnpm dev          # proxies /api/v1 to 127.0.0.1:8000
 | LLM adapters — four wire formats, invocation | Done |
 | Tools — registry, sandboxed execution | Done |
 | Trading — risk envelope, order outbox, orders and positions | Done |
+| Outbox relay — the process that drains the queue | Done |
 | Services — analyst and billing clients, per-tenant breaking | Done |
 | Frontend — chat, threads, streaming client | Done |
 | Frontend — sign-in, trading, membership, settings | Done |
-| Outbox relay — the process that drains the queue | Not started |
 | Market data — live quotes, WebSocket | Not started |
 | Frontend — dashboard, market view | Not started |
 | Credential decryption | Deliberately unwired — see below |
@@ -249,16 +261,17 @@ Credential decryption raises `NotImplementedError` rather than returning
 plaintext. Wiring key management should be an obvious missing step, not
 something that appears to work until someone reads the storage.
 
-The outbox is written and read; what is missing is the long-running process
-that drains it to the message queue. `OutboxRelay` is the piece — it is tested
-against a fake publisher and needs a real one plus somewhere to run.
+The relay is written and tested; the RocketMQ publisher inside it has not been
+run against a live broker. Everything above it has: the queueing, the retry,
+the give-up, the shutdown, and the re-delivery after a broker comes back are
+all exercised, and `--dry-run` runs the whole path without one.
 
 ## Development
 
 ```bash
 cd server
 uv sync --extra dev
-pytest                 # 729 tests, in-memory SQLite, no services needed
+pytest                 # 745 tests, in-memory SQLite, no services needed
 ruff check kairos/
 mypy kairos/
 alembic upgrade head   # only when running against a real database

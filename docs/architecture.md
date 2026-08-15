@@ -401,6 +401,32 @@ worker 消费消息队列，本进程不说那个协议。在请求路径里直�
 | 顺序键 = `account_id` | 同账户的下单/撤单必须按序，否则撤单会跑到它要撤的买入前面 |
 | 标记 sent 在 publish **返回之后** | 中途崩溃要重投而不是丢单。重投安全的前提正是幂等键先生成 |
 | 失败 5 次转 `FAILED` | 永不 drain 的队列会把它后面每一张单都挡住 |
+| 取行用 `FOR UPDATE SKIP LOCKED` | 两个 relay 实例（比如滚动发布期间新旧并存）会各自捞到同一批行、把每张单投两遍。`SKIP LOCKED` 让第二个跳过已被认领的行继续走，而不是堵在后面 |
+
+方言判定用**显式名单**而不是 SQLAlchemy 的 `supports_for_update_of`——后者描述的是 `FOR UPDATE OF <表>` 子句，是另一个特性，把它读成「支持 SKIP LOCKED」会在 Postgres 上静默关掉锁，而那正是最需要它的地方。
+
+### relay 进程
+
+`scripts/relay.py`，跑在任何请求之外：
+
+```bash
+python scripts/relay.py             # drain 到 RocketMQ，直到被停
+python scripts/relay.py --dry-run   # 只记录不发送
+python scripts/relay.py --once      # 扫一遍就退，给用定时器而不是常驻进程的部署
+```
+
+| 设计点 | 为什么 |
+|---|---|
+| 每次 sweep 开一个新 session 并提交 | 全程持有一个会让事务——以及它取的行锁——和进程一样长命 |
+| 忙/闲两个间隔（0.1s / 2s） | 有活时按 broker 能吃多快就多快；空闲时不该变成余生每 100ms 一次数据库查询 |
+| 停止是**等事件**不是 sleep | 空闲间隔里发出的停止应当立刻生效，而不是等间隔走完 |
+| 停止**不取消**正在进行的 publish | 取消会留下一条投递结果无人知晓的消息。可恢复，但干净的关闭不该需要被恢复 |
+| 一次 sweep 抛异常只记日志、循环继续 | 数据库抖一下该花掉一次 sweep，不该花掉整个进程 |
+| publisher 的 `start`/`stop` 是可选的 | 有连接的实现（RocketMQ）需要，没有的（dry-run）不该被迫实现 |
+
+`RocketMQPublisher` **懒 import 客户端**：让每个碰到这个包的进程（测试套件、demo）都必须装好 broker 客户端才能启动是荒谬的，它们一条消息都不发。
+
+⚠️ **这个 publisher 没有对着真 broker 跑过。**它之上的每一层都跑过了：入队、重试、放弃、关闭、以及 broker 恢复后的重投，`--dry-run` 能把整条路径走完。
 
 ### 回程：只读
 
@@ -686,7 +712,7 @@ Settings
 
 | 项 | 状态 |
 |---|---|
-| 后端测试 | **729 通过**，内存 SQLite，不需要任何外部服务 |
+| 后端测试 | **745 通过**，内存 SQLite，不需要任何外部服务 |
 | 前端测试 | **140 通过** |
 | 类型检查 | mypy `strict = true` / tsc `strict` 双向干净 |
 | 架构边界 | import-linter 契约 + 读 AST 的架构测试 |
@@ -698,7 +724,7 @@ Settings
 
 **平台**：租户隔离 · 登录服务 session 认证 · 模型目录与选型链 · 配额两阶段 · 熔断与降级 · 声明式管线 · 流式协议与重放 · 持久化与迁移 · 四种线协议 · 工具注册表与沙箱 · 组装根
 
-**交易**：风控信封 · 订单 outbox · worker 订单只读访问 · 持仓推导
+**交易**：风控信封 · 订单 outbox · relay 进程 · worker 订单只读访问 · 持仓推导
 
 **服务接入**：analyst / billing 两个 HTTP 客户端，按 `(租户, 服务)` 维度熔断
 
@@ -708,7 +734,7 @@ Settings
 
 | 项 | 状态 |
 |---|---|
-| **outbox relay 进程** | `OutboxRelay` 已写、已用假 publisher 测过；缺的是真 publisher 和一个跑它的常驻进程。这是下单链路上唯一还断着的一环 |
+| RocketMQ publisher 实测 | relay 本身已建成并测过（入队/重试/放弃/关闭/broker 恢复后重投）；**publisher 没对着真 broker 跑过**，需要 broker + 客户端安装 |
 | 供应商 HTTP 客户端 | 编码层已完成，`Transport` 实现未接 |
 | Redis 缓存适配器 | 配置项已有，`adapters/cache/` 未建。**键构造器必须强制前置租户段**——HTTP 层漏判时，缓存层要能自然落空，构成纵深防御。注意：分析师数据**不在此列**，那一层缓存归 analyst-service 自己，平台再加一层就是第二个要失效的东西 |
 | MCP 工具接入 | 注册表已支持，接入层未建 |
