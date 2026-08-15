@@ -1,0 +1,11 @@
+# 本地端到端测试 profile：H2 内存库替 MySQL（镜像拉不下来时用）。Redis/RocketMQ 仍连真容器。
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:recharge;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:h2-schema.sql

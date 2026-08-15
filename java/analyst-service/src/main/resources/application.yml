@@ -1,0 +1,42 @@
+server:
+  port: 8091   # 避开主平台 8000、execution-worker 8090
+
+spring:
+  application:
+    name: kairos-analyst-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis}   # kairos-trader-redis-1 容器密码 redis
+      database: 0
+  # 数据真身 Postgres:复用主平台 kairos-trader-postgres-1(localhost:5432),独立 analyst schema。
+  datasource:
+    url: jdbc:postgresql://${ANALYST_DB_HOST:localhost}:${ANALYST_DB_PORT:5432}/${ANALYST_DB_NAME:postgres}
+    username: ${ANALYST_DB_USER:postgres}
+    password: ${ANALYST_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: analyst              # Flyway 管理的 schema(analyst_ratings 表所在)
+    default-schema: analyst
+    create-schemas: true          # schema 不存在自动建,不侵入 public
+
+# 缓存开关
+cache:
+  caffeine:
+    enabled: true      # L1 本地缓存;关掉则退化为纯 Redis 单级
+  invalidate:
+    mq:
+      enabled: false   # 跨节点广播失效:默认关。默认 profile 不含任何 rocketmq 配置 →
+                       # 不装配 producer/consumer → 启动绝不连 broker。开广播见下方 mq profile。
+
+# ⚠️ 默认 profile 故意不写 rocketmq 段:@ConditionalOnProperty 会把空串当"存在"从而触发 producer
+# 自动装配、空 nameserver 启动即失败。要开广播用 `--spring.profiles.active=mq`(见 application-mq.yml)。
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

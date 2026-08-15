@@ -57,16 +57,43 @@ class CacheSettings(BaseSettings):
 
 
 class AuthSettings(BaseSettings):
-    """Token verification.
+    """How a caller is identified.
 
-    `issuer` is required in hosted mode and has no default. The reference
-    implementation verified signature and audience but never the issuer, which
-    left it accepting tokens minted by any project of the same identity
-    provider that happened to use the same audience string.
+    Two providers, and the choice is a deployment decision:
+
+    `session` — the login service owns identity. It mints an opaque token and
+    keeps the user behind it in Redis, refreshing the expiry on each use. This
+    platform reads the same key rather than calling the service on every
+    request, because an identity check on the hot path should not add a network
+    hop to a service that is already one lookup away from the same Redis.
+
+    `jwt` — an external identity provider signs a token that carries its own
+    claims. Kept for deployments that already have one; `issuer` is then
+    required, because verifying signature and audience alone accepts tokens
+    minted by any project of that provider using the same audience string.
     """
 
     model_config = SettingsConfigDict(env_prefix="KAIROS_AUTH_")
 
+    provider: Literal["session", "jwt"] = "session"
+
+    # -- session provider (the login service) ------------------------------
+    #
+    # The key format is the login service's, not ours. It is written here
+    # rather than derived so that a change on either side shows up as a diff
+    # in one obvious place instead of as everyone being logged out.
+    session_key_prefix: str = "login:token:"
+    session_ttl_minutes: Annotated[int, Field(gt=0)] = 30
+    session_refresh_on_read: bool = Field(
+        default=True,
+        description=(
+            "Slide the expiry when a token is used, matching the login "
+            "service's own interceptor. Disable only if some other component "
+            "owns the sliding window, or the two will fight over it."
+        ),
+    )
+
+    # -- jwt provider ------------------------------------------------------
     jwks_url: str | None = None
     issuer: str | None = None
     audience: str = "authenticated"
@@ -84,6 +111,41 @@ class AuthSettings(BaseSettings):
             "last resort rather than a convenience."
         ),
     )
+
+
+class ServiceSettings(BaseSettings):
+    """Where the Java services live.
+
+    Four of them, each owning a capability this platform does not implement
+    itself: identity, analyst data, order execution and billing. They are
+    addressed by URL rather than linked in, so one can be restarted, scaled or
+    replaced without this process knowing.
+
+    Ports match what each service binds by default. They are listed rather
+    than discovered because a wrong port should fail as a connection refused at
+    startup, not as a mysterious 404 halfway through a request.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="KAIROS_SERVICE_")
+
+    login_url: str = "http://localhost:8081"
+    recharge_url: str = "http://localhost:8082"
+    execution_url: str = "http://localhost:8090"
+    analyst_url: str = "http://localhost:8091"
+
+    request_timeout_seconds: Annotated[float, Field(gt=0)] = 5.0
+
+    # The schema the execution worker's migrations own. This platform reads
+    # those tables and never writes them: the worker is the only writer, and
+    # two writers to an order row is how a fill gets overwritten by a stale
+    # status.
+    execution_schema: str = "execution"
+
+    # Orders leave through a table rather than a broker connection. The worker
+    # consumes RocketMQ; this process does not speak it, and adding a second
+    # client to the request path would make placing an order depend on the
+    # broker being reachable at that instant. The relay drains the table.
+    order_outbox_enabled: bool = True
 
 
 class QuotaSettings(BaseSettings):
@@ -148,6 +210,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    services: ServiceSettings = Field(default_factory=ServiceSettings)
     quota: QuotaSettings = Field(default_factory=QuotaSettings)
     resilience: ResilienceSettings = Field(default_factory=ResilienceSettings)
     rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
@@ -163,18 +226,26 @@ class Settings(BaseSettings):
         if self.deployment is not Deployment.HOSTED:
             return self
 
-        missing = [
-            name
-            for name, value in (
+        # What must be present depends on who issues the tokens. Demanding the
+        # JWT settings from a deployment that uses the login service would make
+        # it configure an identity provider it does not have.
+        if self.auth.provider == "session":
+            required: tuple[tuple[str, object], ...] = (
+                ("cache.url", self.cache.url),
+                ("services.login_url", self.services.login_url),
+            )
+        else:
+            required = (
                 ("auth.jwks_url", self.auth.jwks_url),
                 ("auth.issuer", self.auth.issuer),
             )
-            if not value
-        ]
+
+        missing = [name for name, value in required if not value]
         if missing:
             raise ValueError(
-                f"hosted deployment requires {', '.join(missing)}; "
-                "without them tokens cannot be verified"
+                f"hosted deployment with the {self.auth.provider!r} auth "
+                f"provider requires {', '.join(missing)}; without them tokens "
+                "cannot be verified"
             )
         return self
 

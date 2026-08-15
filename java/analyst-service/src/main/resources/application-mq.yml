@@ -1,0 +1,12 @@
+# 广播失效 profile:`--spring.profiles.active=mq` 一键开启跨节点缓存失效。
+# 前提:RocketMQ broker 已起(name-server 可达),否则消费者启动会失败。
+cache:
+  invalidate:
+    mq:
+      enabled: true        # 打开消费者(@ConditionalOnProperty)+ 发布广播
+
+# 只有本 profile 才写 rocketmq 段 → 默认 profile 不触发 producer 自动装配、不连 broker。
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESRV:localhost:9876}
+  producer:
+    group: kairos-analyst-producer

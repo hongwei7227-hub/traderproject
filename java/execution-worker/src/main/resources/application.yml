@@ -1,0 +1,43 @@
+server:
+  port: 8090   # worker 健康检查端口，避开主平台 8000
+
+spring:
+  application:
+    name: kairos-execution-worker
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis}   # kairos-trader-redis-1 容器有密码 redis，不填会 NOAUTH
+
+  # 订单状态落库（§8）：复用主平台 kairos-trader 的 Postgres（localhost:5432），
+  # 独立 execution schema，不碰主平台原有表。连接默认对齐主平台 .env（postgres/postgres/postgres）。
+  datasource:
+    url: jdbc:postgresql://${EXEC_DB_HOST:localhost}:${EXEC_DB_PORT:5432}/${EXEC_DB_NAME:postgres}
+    username: ${EXEC_DB_USER:postgres}
+    password: ${EXEC_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: execution          # Flyway 管理的 schema（订单表所在的“隔间”）
+    default-schema: execution
+    create-schemas: true        # schema 不存在则自动建，不侵入主平台 public schema
+
+# RocketMQ：连本机/甲方 broker 的 name-server（跨语言：Python producer 也连这台）
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESRV:localhost:9876}
+  producer:
+    group: kairos-execution-worker-producer  # 撤单/回流时发消息用
+
+# IBKR paper Gateway（Phase 2 socket；Phase 3 换 OAuth REST）
+ibkr:
+  host: ${IB_HOST:127.0.0.1}
+  port: ${IB_PORT:4002}     # paper Gateway 默认 4002（对齐 ib_order_smoke）
+  client-id: ${IB_CLIENT_ID:101}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

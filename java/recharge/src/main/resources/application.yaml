@@ -1,0 +1,40 @@
+server:
+  port: 8082          # 登录 8081 / execution-worker 8090 之外
+
+spring:
+  application:
+    name: recharge
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 新起的 MySQL 容器；库名 kairos_recharge。schema.sql 建表 + 灌套餐种子。
+    url: jdbc:mysql://localhost:3306/kairos_recharge?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&characterEncoding=utf8
+    username: root
+    password: ${MYSQL_PASSWORD:123456}
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD:redis}   # 复用 kairos-trader-redis-1 容器（密码 redis）
+
+# RocketMQ：复用现有 broker（execution-worker 在用的同一个）
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESRV:localhost:9876}
+  producer:
+    group: recharge-producer-group
+    send-message-timeout: 30000
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id        # 雪花 ID
+  type-aliases-package: com.kairos.recharge.entity
+
+# 支付超时时长（演示可调短，如 30000ms=30s 便于看超时关单）
+recharge:
+  pay-timeout-millis: ${RECHARGE_PAY_TIMEOUT_MILLIS:900000}   # 默认 15min
+
+logging:
+  level:
+    com.kairos.recharge: info

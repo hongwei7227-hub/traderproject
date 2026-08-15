@@ -61,7 +61,7 @@ class TenantScopeMiddleware:
 
         request = Request(scope, receive)
         try:
-            tenant_scope = self._resolver.resolve(
+            tenant_scope = await self._resolver.resolve(
                 authorization=request.headers.get("authorization"),
                 service_token=request.headers.get(SERVICE_TOKEN_HEADER),
                 acting_tenant=request.headers.get(ACTING_TENANT_HEADER),

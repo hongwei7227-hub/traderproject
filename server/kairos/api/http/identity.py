@@ -19,40 +19,46 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from kairos.core.identity import AuthenticationError, TokenVerifier, VerifiedClaims
 from kairos.core.tenancy import Role, TenantId, TenantScope, UserId
 from kairos.runtime.settings import AuthSettings, Deployment, Settings
 
+# Re-exported: these are the vocabulary of this module's callers, and moving
+# them to the core should not have made every route import from two places.
+__all__ = [
+    "AuthenticationError",
+    "ClaimsMapper",
+    "IdentityResolver",
+    "StaticVerifier",
+    "TokenVerifier",
+    "VerifiedClaims",
+    "bare_token",
+]
 
-class AuthenticationError(Exception):
-    """The caller could not be identified.
 
-    Carries no detail about why. Telling an unauthenticated caller whether a
-    token was expired, malformed or simply for the wrong issuer helps them more
-    than it helps us.
+def bare_token(authorization: str) -> str:
+    """The token itself, with or without a scheme in front of it.
+
+    Both shapes arrive in practice. A browser talking to this platform sends
+    `Bearer <token>`; the login service's own interceptor reads the header raw
+    and its clients send the token alone. Refusing the second would mean a
+    token that works against one half of the system and not the other, which
+    reads to a user as being logged in and logged out at the same time.
+
+    Only `Bearer` is stripped. Silently accepting `Basic <base64>` would treat
+    an encoded password as an opaque token and look it up as a session.
     """
+    scheme, separator, rest = authorization.partition(" ")
+    if separator and scheme.lower() == "bearer":
+        token = rest.strip()
+    elif separator:
+        raise AuthenticationError(f"unsupported authorization scheme {scheme!r}")
+    else:
+        token = authorization.strip()
 
-    def __init__(self, reason: str) -> None:
-        self.reason = reason  # logged, never returned
-        super().__init__("Not authenticated")
-
-
-@dataclass(frozen=True, slots=True)
-class VerifiedClaims:
-    """What a verified token asserts."""
-
-    subject: str
-    tenant: str | None = None
-    roles: frozenset[Role] = frozenset()
-
-
-class TokenVerifier(Protocol):
-    """Verifies a bearer token and returns its claims.
-
-    A protocol rather than a concrete class so that the identity provider is a
-    deployment decision, and so that tests need neither a network nor a clock.
-    """
-
-    def verify(self, token: str) -> VerifiedClaims: ...
+    if not token:
+        raise AuthenticationError("empty token")
+    return token
 
 
 class ClaimsMapper:
@@ -119,7 +125,7 @@ class IdentityResolver:
         self._verifier = verifier
         self._mapper = mapper or ClaimsMapper()
 
-    def resolve(
+    async def resolve(
         self,
         *,
         authorization: str | None = None,
@@ -135,7 +141,7 @@ class IdentityResolver:
         if not self._settings.authenticates_requests:
             return self._solo_scope(self._settings.auth)
 
-        return self._from_bearer(authorization)
+        return await self._from_token(authorization)
 
     # -- routes ------------------------------------------------------------
 
@@ -147,16 +153,12 @@ class IdentityResolver:
             roles=frozenset({Role.OWNER}),
         )
 
-    def _from_bearer(self, authorization: str | None) -> TenantScope:
+    async def _from_token(self, authorization: str | None) -> TenantScope:
         if not authorization:
             raise AuthenticationError("no Authorization header")
 
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise AuthenticationError("Authorization header is not a bearer token")
-
         assert self._verifier is not None  # guaranteed by __init__
-        return self._mapper.to_scope(self._verifier.verify(token))
+        return self._mapper.to_scope(await self._verifier.verify(bare_token(authorization)))
 
     def _from_service_token(
         self,
@@ -198,7 +200,7 @@ class StaticVerifier:
     def __init__(self, tokens: dict[str, VerifiedClaims]) -> None:
         self._tokens = dict(tokens)
 
-    def verify(self, token: str) -> VerifiedClaims:
+    async def verify(self, token: str) -> VerifiedClaims:
         try:
             return self._tokens[token]
         except KeyError:

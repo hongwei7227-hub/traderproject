@@ -1,0 +1,13 @@
+server:
+  port: 8081          # 避开 trader Python 后端(8000/8080) 和 execution-worker(8090)
+
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379      # redisson-spring-boot-starter + StringRedisTemplate 共用这份配置
+      password: redis # kairos-trader-redis-1 容器 --requirepass redis
+
+logging:
+  level:
+    com.kairos.login: info

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 脚手架依赖版本对齐 CityAIHub（F:\project\CityAIHub-master），直接搬 -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.kairos</groupId>
+    <artifactId>execution-worker</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>execution-worker</name>
+    <description>Kairos IBKR 下单执行 worker：RocketMQ 消费 → 幂等 → 订单状态机 → IBKR → 状态回流（Phase 2 骨架，见 docs/superpowers/specs/后端/07-plan-phase2）</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <rocketmq-spring.version>2.3.3</rocketmq-spring.version>
+        <!-- 覆盖 Spring Boot 默认 lombok 版本：本机 JDK 24 需 Lombok 1.18.38+，
+             否则 @Data/@Slf4j 静默不生成代码（1.18.36 只支持到 JDK 23） -->
+        <lombok.version>1.18.38</lombok.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web/健康检查（actuator health 给 worker 存活探针） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- RocketMQ：消费下单消息（对齐 07 计划任务 2） -->
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+            <version>${rocketmq-spring.version}</version>
+        </dependency>
+
+        <!-- Redisson：幂等 SETNX + 分布式锁（对齐 spec 00 §4.4，非 SimpleRedisLock） -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>3.27.2</version>
+        </dependency>
+
+        <!-- IBKR 官方 TWS API：连 Gateway 下单。非 Maven 中央仓，已手动装本地仓：
+             mvn install:install-file -Dfile=TwsApi.jar -DgroupId=com.ib -DartifactId=tws-api -Dversion=10.45.01 -Dpackaging=jar
+             （来自 https://interactivebrokers.github.io/downloads/twsapi_macunix.1045.01.zip 的 IBJts/source/JavaClient/TwsApi.jar） -->
+        <dependency>
+            <groupId>com.ib</groupId>
+            <artifactId>tws-api</artifactId>
+            <version>10.45.01</version>
+        </dependency>
+        <!-- TwsApi 10.45 依赖 protobuf（中央仓有） -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.29.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.38</version>   <!-- JDK 24 需 1.18.38+ -->
+            <optional>true</optional>
+        </dependency>
+
+        <!-- 订单状态落库（§8 乐观锁 CAS 前置）：用 JdbcTemplate 直接写 CAS SQL，
+             不引 MyBatis/JPA 全家桶（对齐主平台 kairos-trader 的 raw SQL 无 ORM 哲学）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!-- Postgres 驱动（复用主平台 kairos-trader 的 Postgres 18，独立 execution schema） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Flyway：worker 自治管 execution schema 的建表迁移，不侵入主平台 Alembic。
+             Spring Boot 3.2.4 = Flyway 9.x，flyway-core 已内置 PostgreSQL 支持，无需拆分模块。 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- CAS 并发单测用嵌入式库：H2 PostgreSQL 兼容模式，验证 CAS 逻辑无需起真 Postgres -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 显式声明 Lombok 为注解处理器：JDK 23+ 默认不再运行 classpath 上的处理器，
+                 必须用 annotationProcessorPaths 显式声明，否则 @Data/@Slf4j 不生成代码 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
