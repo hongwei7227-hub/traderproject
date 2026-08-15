@@ -39,3 +39,7 @@ data/
 Thumbs.db
 .idea/
 .vscode/
+
+# Frontend
+web/node_modules/
+web/dist/
