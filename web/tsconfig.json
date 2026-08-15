@@ -31,5 +31,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src"]
 }
