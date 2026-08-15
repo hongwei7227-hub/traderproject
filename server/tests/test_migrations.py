@@ -19,7 +19,9 @@ import pytest
 
 from kairos.adapters.persistence.entities import Base
 
-MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations" / "versions"
+MIGRATIONS = (
+    Path(__file__).resolve().parent.parent / "kairos" / "migrations" / "versions"
+)
 
 
 def migration_files() -> list[Path]:
