@@ -20,7 +20,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from kairos.api.http import configuration as configuration_routes
+from kairos.api.http import market as market_routes
 from kairos.api.http import threads as thread_routes
+from kairos.api.http import trading as trading_routes
 from kairos.api.http.identity import IdentityResolver, TokenVerifier
 from kairos.api.http.middleware import DEFAULT_PUBLIC_PATHS, TenantScopeMiddleware
 from kairos.core.catalog.registry import Catalog
@@ -106,11 +108,14 @@ def _install_routes(app: FastAPI, container: Container) -> None:
     """
     app.include_router(thread_routes.router, prefix="/api/v1")
     app.include_router(configuration_routes.router, prefix="/api/v1")
+    app.include_router(trading_routes.router, prefix="/api/v1")
+    app.include_router(market_routes.router, prefix="/api/v1")
 
     # Satisfied here rather than left to the caller: the catalogue and the
     # resolution chain are the container's, and no deployment substitutes them
     # independently of it.
     app.dependency_overrides[configuration_routes.get_selection] = lambda: container
+    app.dependency_overrides[trading_routes.get_limits] = container.risk_limits
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, Any]:
@@ -130,13 +135,26 @@ def _install_routes(app: FastAPI, container: Container) -> None:
 
 
 def dependency_overrides_for(
-    app: FastAPI, *, engine: Any = None, repositories: Any = None
+    app: FastAPI,
+    *,
+    engine: Any = None,
+    repositories: Any = None,
+    orders: Any = None,
+    gateway: Any = None,
+    account: Any = None,
+    analyst: Any = None,
+    billing: Any = None,
 ) -> None:
     """Point the route dependencies at concrete implementations.
 
     Separate from `create_app` because what satisfies them differs between a
     deployment, an integration test and a unit test — and burying that choice
     inside the factory would force every caller to accept one of them.
+
+    Every parameter is optional and independent. A test that only exercises
+    trading should not have to supply an analyst client, and one that supplies
+    none should still get an app that starts — the unwired dependencies raise
+    only if a route that needs them is actually called.
     """
     if engine is not None:
         app.dependency_overrides[thread_routes.get_engine] = lambda: engine
@@ -145,3 +163,13 @@ def dependency_overrides_for(
         app.dependency_overrides[configuration_routes.get_repositories] = (
             lambda: repositories
         )
+    if orders is not None:
+        app.dependency_overrides[trading_routes.get_orders] = lambda: orders
+    if gateway is not None:
+        app.dependency_overrides[trading_routes.get_gateway] = lambda: gateway
+    if account is not None:
+        app.dependency_overrides[trading_routes.get_account] = lambda: account
+    if analyst is not None:
+        app.dependency_overrides[market_routes.get_analyst] = lambda: analyst
+    if billing is not None:
+        app.dependency_overrides[market_routes.get_billing] = lambda: billing

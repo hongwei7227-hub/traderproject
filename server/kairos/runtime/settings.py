@@ -148,6 +148,39 @@ class ServiceSettings(BaseSettings):
     order_outbox_enabled: bool = True
 
 
+class TradingSettings(BaseSettings):
+    """The risk envelope, and the account it is measured against.
+
+    Every limit is a fraction of equity rather than an absolute sum, so the
+    envelope scales with the account instead of needing to be re-tuned whenever
+    it grows. Defaults are deliberately tight: an envelope that has to be
+    loosened on purpose leaves a trace of someone deciding to.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="KAIROS_TRADING_")
+
+    enabled: bool = False
+    default_account_id: str = "paper"
+
+    max_order_fraction: Annotated[float, Field(gt=0, le=1)] = 0.02
+    max_position_fraction: Annotated[float, Field(gt=0, le=1)] = 0.30
+    max_orders_per_day: Annotated[int, Field(ge=0)] = 3
+    universe: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Tradable symbols. Empty means unrestricted rather than nothing "
+            "tradable — otherwise a deployment that had not configured one "
+            "would refuse every order."
+        ),
+    )
+
+    # Used only when the account service cannot be reached. Sizing against a
+    # guess is worse than refusing, so this is deliberately small: it lets a
+    # demo place tiny orders and stops a real deployment placing large ones on
+    # a number nobody supplied.
+    fallback_equity: Annotated[float, Field(ge=0)] = 0.0
+
+
 class QuotaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KAIROS_QUOTA_")
 
@@ -211,6 +244,7 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     services: ServiceSettings = Field(default_factory=ServiceSettings)
+    trading: TradingSettings = Field(default_factory=TradingSettings)
     quota: QuotaSettings = Field(default_factory=QuotaSettings)
     resilience: ResilienceSettings = Field(default_factory=ResilienceSettings)
     rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)

@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Self
 
 from sqlalchemy.ext.asyncio import (
@@ -47,6 +48,7 @@ from kairos.core.reasoning.pipeline import Pipeline
 from kairos.core.reasoning.stages import standard_pipeline
 from kairos.core.resilience.breaker import BreakerPolicy, CircuitBreaker
 from kairos.core.tenancy.context import current_scope
+from kairos.core.trading import RiskLimits
 from kairos.runtime.settings import Settings, get_settings
 
 
@@ -232,6 +234,28 @@ class Container:
                 tenant_preferences=preferences,  # type: ignore[arg-type]
                 baseline=self.baseline(),
             )
+        )
+
+    # -- trading -----------------------------------------------------------
+
+    def risk_limits(self) -> RiskLimits:
+        """The deployment's risk envelope.
+
+        Built from settings on each call rather than cached, so that a limit
+        can be changed without a restart once the settings themselves are
+        reloadable. The construction is trivial; caching it would only make the
+        eventual reload a puzzle.
+
+        The fractions are `Decimal` here because they are compared against
+        money. Keeping them as floats would let a limit of 0.30 refuse a
+        position of exactly 30%, or not, depending on the price.
+        """
+        trading = self.settings.trading
+        return RiskLimits(
+            max_order_fraction=Decimal(str(trading.max_order_fraction)),
+            max_position_fraction=Decimal(str(trading.max_position_fraction)),
+            max_orders_per_day=trading.max_orders_per_day,
+            universe=frozenset(s.upper() for s in trading.universe),
         )
 
     def baseline(self) -> dict[str, str]:
