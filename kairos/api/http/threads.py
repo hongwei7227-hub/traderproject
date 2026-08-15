@@ -17,7 +17,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from kairos.api.stream.bridge import RecordingStream, StreamBridge, run_and_stream
@@ -204,13 +204,18 @@ async def replay_thread(
 async def delete_thread(
     thread_id: UUID,
     repositories=Depends(get_repositories),  # type: ignore[no-untyped-def]
-) -> None:
+) -> Response:
     """Delete a thread.
 
     Expressed as a scoped delete rather than fetch-then-delete, so the
     ownership predicate cannot be lost between the two statements.
+
+    Returns a bare response rather than annotating `-> None`: the framework
+    infers a response model from the return annotation, and a model on a 204
+    is a contradiction it refuses at import.
     """
     await repositories.threads.remove(thread_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def build_transcript(stream: EventStream) -> Transcript:

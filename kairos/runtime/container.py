@@ -155,20 +155,32 @@ class Container:
         self.quota = QuotaPolicy()
         self.resolution = ModelResolutionChain()
 
-        self._engine = engine or create_async_engine(
-            settings.database.url,
-            pool_size=settings.database.pool_size,
-            max_overflow=settings.database.max_overflow,
-            pool_timeout=settings.database.pool_timeout_seconds,
-            echo=settings.database.echo_sql,
+        # Built on first use rather than here. Constructing an application
+        # object should not require a database driver to be installed or a
+        # database to be reachable — a process must be able to come up far
+        # enough to report that it cannot reach its database.
+        self._engine = engine
+        self._sessions = (
+            async_sessionmaker(engine, expire_on_commit=False) if engine else None
         )
-        self._sessions = async_sessionmaker(self._engine, expire_on_commit=False)
 
     @classmethod
     def build(cls, catalog: Catalog, settings: Settings | None = None) -> Self:
         return cls(settings or get_settings(), catalog)
 
     # -- request scope -----------------------------------------------------
+
+    def _session_factory(self):  # type: ignore[no-untyped-def]
+        if self._sessions is None:
+            self._engine = create_async_engine(
+                self.settings.database.url,
+                pool_size=self.settings.database.pool_size,
+                max_overflow=self.settings.database.max_overflow,
+                pool_timeout=self.settings.database.pool_timeout_seconds,
+                echo=self.settings.database.echo_sql,
+            )
+            self._sessions = async_sessionmaker(self._engine, expire_on_commit=False)
+        return self._sessions
 
     @asynccontextmanager
     async def request(self) -> AsyncIterator[RequestContext]:
@@ -177,7 +189,7 @@ class Container:
         Committed on success and rolled back on any exception, so a handler
         that raises halfway through cannot leave a partial write behind.
         """
-        async with self._sessions() as session:
+        async with self._session_factory()() as session:
             context = RequestContext.of(session)
             try:
                 yield context
@@ -244,7 +256,8 @@ class Container:
     # -- lifecycle ---------------------------------------------------------
 
     async def aclose(self) -> None:
-        await self._engine.dispose()
+        if self._engine is not None:
+            await self._engine.dispose()
 
 
 @asynccontextmanager
