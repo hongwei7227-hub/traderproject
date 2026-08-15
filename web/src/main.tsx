@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
 import { App } from '@/App'
+import { SessionProvider } from '@/contexts/SessionContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { assertConfigured } from '@/lib/env'
 import { createQueryClient } from '@/lib/queryClient'
@@ -24,9 +25,11 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={createQueryClient()}>
       <BrowserRouter>
-        <ThemeProvider>
-          <App />
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>
+        </SessionProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

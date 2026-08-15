@@ -65,6 +65,124 @@ export interface UsageView {
   total_tokens: number
 }
 
+// -- trading ---------------------------------------------------------------
+
+export type OrderSide = 'BUY' | 'SELL'
+
+export interface OrderSummary {
+  broker_order_id: string
+  proposal_id: string
+  symbol: string
+  side: OrderSide
+  quantity: number
+  filled_quantity: number
+  remaining: number
+  status: string
+  /**
+   * Sent by the server rather than derived here.
+   *
+   * Deriving it from a list of statuses would mean keeping a copy of the
+   * order state machine in the client, and the two drift the first time a
+   * status is added on the other side.
+   */
+  terminal: boolean
+  average_price: string
+  limit_price: string | null
+  rationale: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface OrderList {
+  orders: OrderSummary[]
+}
+
+export interface PositionSummary {
+  symbol: string
+  quantity: number
+  average_cost: string
+  cost_basis: string
+}
+
+export interface PositionList {
+  positions: PositionSummary[]
+}
+
+export interface PlaceOrderBody {
+  symbol: string
+  side: OrderSide
+  quantity: number
+  limit_price?: string | null
+  reference_price?: string | null
+  rationale?: string
+  account_id?: string
+}
+
+export interface OrderAccepted {
+  proposal_id: string
+  status: string
+  detail: string[]
+}
+
+/** The 422 body when the risk envelope refuses. */
+export interface OrderRefusal {
+  refusals: string[]
+  detail: string[]
+}
+
+// -- analyst ---------------------------------------------------------------
+
+export interface AnalystGrade {
+  firm: string
+  from_grade: string
+  to_grade: string
+  action: string
+}
+
+export interface AnalystRating {
+  symbol: string
+  company_name: string
+  consensus: string
+  target_price: number | null
+  target_high: number | null
+  target_low: number | null
+  analyst_count: number
+  recent_grades: AnalystGrade[]
+  updated_at: string | null
+  /** Null when there is no target — zero would assert fair value. */
+  upside: number | null
+}
+
+// -- billing ---------------------------------------------------------------
+
+export interface BillingPlan {
+  id: number
+  name: string
+  price: string
+  duration_days: number
+  monthly_price: string
+}
+
+export interface PlanList {
+  plans: BillingPlan[]
+}
+
+export interface MembershipStatus {
+  level: number
+  active: boolean
+  expires_at: string | null
+}
+
+export interface RechargeOrderStatus {
+  id: number
+  plan_id: number
+  amount: string
+  state: string
+  awaiting_payment: boolean
+  created_at: string | null
+  paid_at: string | null
+}
+
 export interface SendMessageBody {
   prompt: string
   model?: string

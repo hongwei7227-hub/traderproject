@@ -42,6 +42,33 @@ export const keys = {
     usage: () => [...keys.account.all, 'usage'] as const,
     credentials: () => [...keys.account.all, 'credentials'] as const,
   },
+
+  trading: {
+    all: ['trading'] as const,
+    orders: (filters: { workingOnly?: boolean } = {}) =>
+      [...keys.trading.all, 'orders', filters] as const,
+    order: (brokerOrderId: string) =>
+      [...keys.trading.all, 'order', brokerOrderId] as const,
+    /**
+     * Keyed separately from an order, because until the worker has been to the
+     * broker there is no order — only a proposal to poll for.
+     */
+    proposal: (proposalId: string) =>
+      [...keys.trading.all, 'proposal', proposalId] as const,
+    positions: () => [...keys.trading.all, 'positions'] as const,
+  },
+
+  analyst: {
+    all: ['analyst'] as const,
+    rating: (symbol: string) => [...keys.analyst.all, symbol.toUpperCase()] as const,
+  },
+
+  billing: {
+    all: ['billing'] as const,
+    plans: () => [...keys.billing.all, 'plans'] as const,
+    membership: () => [...keys.billing.all, 'membership'] as const,
+    recharge: (orderId: number) => [...keys.billing.all, 'recharge', orderId] as const,
+  },
 } as const
 
 /**

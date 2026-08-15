@@ -1,14 +1,63 @@
-import { MessageSquare, Moon, Sun, Monitor, SlidersHorizontal } from 'lucide-react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import {
+  CandlestickChart,
+  CreditCard,
+  MessageSquare,
+  Monitor,
+  Moon,
+  SlidersHorizontal,
+  Sun,
+} from 'lucide-react'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import type { ReactElement } from 'react'
 
 import { Button } from '@/components/ui/Button'
+import { useSession } from '@/contexts/SessionContext'
 import { useTheme, type ThemeChoice } from '@/contexts/ThemeContext'
 import { cn } from '@/lib/cn'
+import { isSoloMode } from '@/lib/env'
+import { BillingPage } from '@/pages/Billing/BillingPage'
 import { ChatPage } from '@/pages/Chat/ChatPage'
 import { SettingsPage } from '@/pages/Settings/SettingsPage'
+import { SignInPage } from '@/pages/SignIn/SignInPage'
 import { ThreadListPage } from '@/pages/Threads/ThreadListPage'
+import { TradingPage } from '@/pages/Trading/TradingPage'
 
 export function App() {
+  return (
+    <Routes>
+      {/* Outside the shell: it is the page someone lands on when they have no
+          session, so it cannot be behind the thing that requires one. */}
+      <Route path="/signin" element={<SignInPage />} />
+      <Route
+        path="*"
+        element={
+          <RequireSession>
+            <Shell />
+          </RequireSession>
+        }
+      />
+    </Routes>
+  )
+}
+
+/**
+ * The guard.
+ *
+ * Remembers where someone was headed and sends them back there after signing
+ * in. Without that, being bounced to the login page means losing your place as
+ * well as your session.
+ */
+function RequireSession({ children }: { children: ReactElement }) {
+  const { signedIn } = useSession()
+  const location = useLocation()
+
+  if (!signedIn) {
+    return <Navigate to="/signin" replace state={{ from: location.pathname }} />
+  }
+  return children
+}
+
+function Shell() {
   return (
     <div className="flex h-full">
       <Sidebar />
@@ -17,6 +66,8 @@ export function App() {
           <Route path="/" element={<Navigate to="/threads" replace />} />
           <Route path="/threads" element={<ThreadListPage />} />
           <Route path="/threads/:threadId" element={<ChatPage />} />
+          <Route path="/trading" element={<TradingPage />} />
+          <Route path="/billing" element={<BillingPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -34,10 +85,14 @@ export function App() {
  */
 const DESTINATIONS = [
   { to: '/threads', label: 'Conversations', Icon: MessageSquare },
+  { to: '/trading', label: 'Trading', Icon: CandlestickChart },
+  { to: '/billing', label: 'Membership', Icon: CreditCard },
   { to: '/settings', label: 'Settings', Icon: SlidersHorizontal },
 ] as const
 
 function Sidebar() {
+  const { session, signOut } = useSession()
+
   return (
     <nav
       className="flex w-56 shrink-0 flex-col border-r border-border bg-surface"
@@ -71,7 +126,19 @@ function Sidebar() {
         ))}
       </ul>
 
-      <div className="border-t border-border p-2">
+      <div className="space-y-2 border-t border-border p-2">
+        {/* A single-user build has nobody to sign out as, so offering it would
+            be a control that does nothing. */}
+        {!isSoloMode && session && (
+          <div className="flex items-center justify-between px-1">
+            <span className="truncate text-xs text-ink-muted" title={session.username}>
+              {session.username}
+            </span>
+            <Button variant="ghost" size="sm" onClick={signOut}>
+              Sign out
+            </Button>
+          </div>
+        )}
         <ThemeToggle />
       </div>
     </nav>

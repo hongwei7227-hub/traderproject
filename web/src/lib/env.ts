@@ -35,8 +35,17 @@ export const env = {
   /** The fixed identity a single-user deployment answers as. */
   localUserId: readString(import.meta.env.VITE_AUTH_USER_ID, 'local-dev-user'),
 
-  supabaseUrl: readString(import.meta.env.VITE_SUPABASE_URL, ''),
-  supabaseKey: readString(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, ''),
+  /**
+   * The login service.
+   *
+   * Identity belongs to it: it checks the password, mints the token and holds
+   * the session. This client posts credentials there and then presents the
+   * token it gets back to the platform, which reads the same session.
+   *
+   * A separate origin from the API because the two are separate services. In
+   * development the dev server proxies both, so this is usually left empty.
+   */
+  loginUrl: readString(import.meta.env.VITE_LOGIN_URL, '/auth'),
 } as const
 
 export const isPlatformMode = env.hostMode === 'platform'
@@ -45,21 +54,20 @@ export const isSoloMode = env.hostMode === 'oss'
 /**
  * Whether a real sign-in flow is available.
  *
- * Distinct from the mode: a platform build whose auth credentials are missing
- * is misconfigured, and saying so is better than falling back to letting
- * everyone in.
+ * Distinct from the mode: a platform build with nowhere to sign in is
+ * misconfigured, and saying so is better than falling back to letting everyone
+ * in.
  */
 export function authConfigured(): boolean {
   if (!isPlatformMode) return true
-  return env.supabaseUrl.length > 0 && env.supabaseKey.length > 0
+  return env.loginUrl.length > 0
 }
 
 export function assertConfigured(): void {
   if (isPlatformMode && !authConfigured()) {
     throw new Error(
-      'This build targets a multi-tenant deployment but no auth provider is ' +
-        'configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY, ' +
-        'or build with VITE_HOST_MODE=oss.',
+      'This build targets a multi-tenant deployment but no login service is ' +
+        'configured. Set VITE_LOGIN_URL, or build with VITE_HOST_MODE=oss.',
     )
   }
 }
