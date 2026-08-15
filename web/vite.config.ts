@@ -2,7 +2,11 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
-const backend = process.env.VITE_PROXY_BACKEND ?? 'http://localhost:8000'
+// Explicitly IPv4. `localhost` resolves to ::1 first on Windows, so a machine
+// with anything else bound to that port on IPv6 silently proxies there instead
+// — which looks like the backend behaving strangely rather than like a request
+// reaching a different program entirely.
+const backend = process.env.VITE_PROXY_BACKEND ?? 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],
