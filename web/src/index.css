@@ -1,0 +1,19 @@
+@import './styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* The default outline is removed by the base layer; this puts back a visible
+   one for keyboard users only, so it is present where it is needed and absent
+   where it would be noise. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kairos</title>
+
+    <script>
+      // Applied before the stylesheet resolves, so the first paint is already
+      // the right theme. Doing this from React would show one frame of light
+      // on a dark setup — brief, but the kind of flicker people notice every
+      // single load.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('kairos.theme')
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var theme = dark ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.style.colorScheme = theme
+        } catch (_) {
+          /* private mode, or storage disabled — the provider settles it. */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
