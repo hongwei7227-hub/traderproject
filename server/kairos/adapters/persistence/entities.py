@@ -307,3 +307,75 @@ class UsageQuota(Base, ScopedEntity, TimestampMixin):
         default="reject",
         comment="reject | degrade | allow — what to do when the allowance runs out.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Trading
+# ---------------------------------------------------------------------------
+
+
+class OutboxStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class OrderOutbox(Base, ScopedEntity, TimestampMixin):
+    """A proposal on its way to the execution worker.
+
+    The worker consumes a message broker. This process does not speak that
+    protocol, and adding a client to the request path would make placing an
+    order depend on the broker being reachable at that instant — a user would
+    see the submission fail for a reason that has nothing to do with their
+    order.
+
+    So the proposal is committed here first, in the same transaction as
+    whatever else the request did, and a relay drains the table. That is the
+    ordinary transactional-outbox arrangement, and its point is that the
+    decision to trade and the record of having decided cannot end up
+    disagreeing: either both are committed or neither is.
+
+    `proposal_id` is unique per tenant because it is half of the worker's
+    idempotency key. A retried submission carries the same one and collapses
+    into the original row rather than placing a second order.
+    """
+
+    __tablename__ = "order_outbox"
+    __table_args__ = (
+        # Serves the tenant-scoped reads, and leads with tenant_id as every
+        # scoped table must.
+        UniqueConstraint("tenant_id", "proposal_id", name="uq_outbox_tenant_proposal"),
+        # Serves the relay, which sweeps across tenants and so cannot lead with
+        # one. Single-column on purpose: adding `created_at` to it would be a
+        # composite index on a scoped table that does not lead with the tenant,
+        # and the ordering it would save is a sort over the pending rows only —
+        # a set that stays small precisely because the relay keeps draining it.
+        Index("ix_outbox_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PrimaryKey, primary_key=True, default=uuid.uuid4
+    )
+    proposal_id: Mapped[uuid.UUID] = mapped_column(PrimaryKey, nullable=False)
+    account_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # The destination and the body, kept as the worker expects them. Rendered
+    # at write time rather than at send time so that a change to the proposal
+    # shape cannot silently reinterpret rows already queued.
+    destination: Mapped[str] = mapped_column(String(128), nullable=False)
+    ordering_key: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment=(
+            "Account id. Orders for one account must reach the worker in "
+            "order, or a cancel can overtake the buy it was cancelling."
+        ),
+    )
+    payload: Mapped[dict] = mapped_column(JsonDoc, nullable=False)
+
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=OutboxStatus.PENDING
+    )
+    attempts: Mapped[int] = mapped_column(nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
