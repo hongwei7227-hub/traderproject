@@ -3,7 +3,6 @@ name = "kairos"
 version = "0.1.0"
 description = "Multi-tenant agent platform for financial research"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
 
 dependencies = [
     "pydantic>=2.10",
