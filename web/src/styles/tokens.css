@@ -1,0 +1,141 @@
+/**
+ * Design tokens.
+ *
+ * Two layers. The first names colours; the second assigns them roles. A
+ * component only ever reaches for a role, so a palette change is one edit here
+ * rather than a search across the tree — and a role means the same thing in
+ * both themes even when the underlying colour inverts.
+ */
+
+:root {
+  /* Layer one: the palette. Referenced only by layer two. */
+  --grey-00: #ffffff;
+  --grey-05: #f7f8f9;
+  --grey-10: #eceef1;
+  --grey-20: #dcdfe4;
+  --grey-40: #9aa2ad;
+  --grey-60: #5c646f;
+  --grey-80: #2f353d;
+  --grey-90: #1c2127;
+  --grey-95: #14181d;
+
+  --blue-40: #4a8cf7;
+  --blue-50: #2f6fe0;
+  --blue-10: #e8f0fe;
+
+  --green-50: #1f8f5f;
+  --red-50: #d0453b;
+  --amber-50: #c07c1a;
+
+  /* Layer two: roles. This is what components use. */
+  --canvas: var(--grey-05);
+  --surface: var(--grey-00);
+  --raised: var(--grey-00);
+  --border: var(--grey-20);
+
+  --ink: var(--grey-90);
+  --ink-muted: var(--grey-60);
+  --ink-faint: var(--grey-40);
+
+  --accent: var(--blue-50);
+  --accent-soft: var(--blue-10);
+  --accent-ink: var(--grey-00);
+
+  --positive: var(--green-50);
+  --negative: var(--red-50);
+  --caution: var(--amber-50);
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 14px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 4%);
+  --shadow-overlay: 0 8px 32px rgb(0 0 0 / 12%);
+}
+
+/**
+ * Dark is a re-assignment of roles, not a separate set of names.
+ *
+ * `--surface` is lighter than `--canvas` in light mode and darker in dark
+ * mode, because in both cases the role means "the sheet content sits on".
+ * Components stay unchanged.
+ */
+[data-theme='dark'] {
+  --canvas: var(--grey-95);
+  --surface: var(--grey-90);
+  --raised: var(--grey-80);
+  --border: #333a43;
+
+  --ink: var(--grey-10);
+  --ink-muted: var(--grey-40);
+  --ink-faint: var(--grey-60);
+
+  --accent: var(--blue-40);
+  --accent-soft: #1b2a44;
+  --accent-ink: var(--grey-95);
+
+  --positive: #35b57c;
+  --negative: #e8695e;
+  --caution: #d99b33;
+
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 28%);
+  --shadow-overlay: 0 8px 32px rgb(0 0 0 / 50%);
+}
+
+/**
+ * Follow the system only when nobody has chosen.
+ *
+ * The attribute selector above wins over this block because it is more
+ * specific, so an explicit choice survives a change in system preference —
+ * which is what someone who picked a theme expects.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --canvas: var(--grey-95);
+    --surface: var(--grey-90);
+    --raised: var(--grey-80);
+    --border: #333a43;
+
+    --ink: var(--grey-10);
+    --ink-muted: var(--grey-40);
+    --ink-faint: var(--grey-60);
+
+    --accent: var(--blue-40);
+    --accent-soft: #1b2a44;
+    --accent-ink: var(--grey-95);
+
+    --positive: #35b57c;
+    --negative: #e8695e;
+    --caution: #d99b33;
+
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 28%);
+    --shadow-overlay: 0 8px 32px rgb(0 0 0 / 50%);
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Respected globally rather than per animation, so a new component cannot
+   forget it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
